@@ -1,0 +1,9 @@
+data/
+resource/node_modules/
+resource/dist/
+resource/src-tauri/target/
+resource/src-tauri/resources/CodexTimeZoneBackend.exe
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
