@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
-import { MacBadge, MacButton, MacCheckbox, MacGlassPanel, MacLabel, MacPopUpButton, MacPopUpButtonItem, MacSpinner, MacTextField } from '@macvue/core'
+import { MacBadge, MacButton, MacCheckbox, MacGlassPanel, MacLabel, MacSpinner, MacTextField } from '@macvue/core'
 
 type Zone = { label: string; id: string; windowsId: string }
 type Settings = { mode: 'zone' | 'offset'; zoneId: string; offset: number; executable: string; dreamSkinCompatible: boolean }
@@ -37,9 +37,9 @@ onBeforeUnmount(() => { window.clearTimeout(clockTimer); if (media && appearance
       <div class="primary-grid">
         <MacGlassPanel class="settings-card" material="regular">
           <div class="section-heading"><MacLabel variant="title-2">时区设置</MacLabel><p>选择目标时区，预览会立即同步。</p></div>
-          <label>设置方式</label><div class="select-field"><MacPopUpButton v-model="settings.mode" size="large"><MacPopUpButtonItem value="zone">使用时区名称（推荐，支持夏令时）</MacPopUpButtonItem><MacPopUpButtonItem value="offset">使用固定 UTC 偏移</MacPopUpButtonItem></MacPopUpButton></div>
-          <template v-if="settings.mode === 'zone'"><label>时区名称</label><div class="select-field"><MacPopUpButton v-model="settings.zoneId" size="large"><MacPopUpButtonItem v-for="zone in zones" :key="zone.id" :value="zone.id">{{ zone.label }}　·　{{ zone.id }}</MacPopUpButtonItem></MacPopUpButton></div></template>
-          <template v-else><label>UTC 固定偏移</label><div class="select-field"><MacPopUpButton v-model="settings.offset" size="large"><MacPopUpButtonItem v-for="offset in offsets" :key="offset" :value="offset">{{ offsetText(offset * 60) }}</MacPopUpButtonItem></MacPopUpButton></div></template>
+          <label for="setting-mode">设置方式</label><div class="select-field"><select id="setting-mode" v-model="settings.mode" class="glass-select"><option value="zone">使用时区名称（推荐，支持夏令时）</option><option value="offset">使用固定 UTC 偏移</option></select></div>
+          <template v-if="settings.mode === 'zone'"><label for="zone-name">时区名称</label><div class="select-field"><select id="zone-name" v-model="settings.zoneId" class="glass-select"><option v-for="zone in zones" :key="zone.id" :value="zone.id">{{ zone.label }}　·　{{ zone.id }}</option></select></div></template>
+          <template v-else><label for="utc-offset">UTC 固定偏移</label><div class="select-field"><select id="utc-offset" v-model="settings.offset" class="glass-select"><option v-for="offset in offsets" :key="offset" :value="offset">{{ offsetText(offset * 60) }}</option></select></div></template>
           <div class="offset-line"><span>当前 UTC 偏移</span><strong>{{ targetClock.offset }}</strong></div><p class="hint">地区时区自动处理夏令时；固定偏移不随季节变化。<br>半小时和四十五分钟时区请使用时区名称。</p>
         </MacGlassPanel>
         <MacGlassPanel class="preview-card" material="clear">
