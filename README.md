@@ -1,6 +1,6 @@
 # Codex 时区启动器
 
-一个面向 Windows 的 Codex 桌面客户端时区启动器。它只为本次启动的 Codex 进程设置时区，不修改 Windows 系统时区，也不会影响其他软件。
+一个借助codex实现的面向 Windows 的 Codex 桌面客户端时区启动器。它只为本次启动的 Codex 进程设置时区，不修改 Windows 系统时区，也不会影响其他软件。
 
 ![深色模式界面](docs/screenshot-dark.png)
 
