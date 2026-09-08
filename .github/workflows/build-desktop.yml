@@ -1,0 +1,150 @@
+name: Build desktop applications
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-macos:
+    name: Build macOS ARM64
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: resource/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        working-directory: resource
+        run: npm ci
+
+      - name: Build macOS application
+        working-directory: resource
+        run: npm run build:mac
+
+      - name: Verify macOS application
+        run: |
+          codesign --verify --deep --strict --verbose=2 "Codex 时区启动器.app"
+          file "Codex 时区启动器.app/Contents/MacOS/codextimezonerev"
+
+      - name: Package macOS application
+        run: |
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent \
+            "Codex 时区启动器.app" \
+            "artifacts/Codex-TimeZone-Launcher-macOS-arm64.zip"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Codex-TimeZone-Launcher-macOS-arm64
+          path: artifacts/Codex-TimeZone-Launcher-macOS-arm64.zip
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: resource/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install frontend dependencies
+        working-directory: resource
+        run: npm ci
+
+      - name: Build Windows application
+        working-directory: resource
+        shell: pwsh
+        run: node desktop.mjs build win --configured
+
+      - name: Verify Windows application
+        shell: pwsh
+        run: |
+          Get-Item "CodexTimeZoneLauncher.exe" |
+            Select-Object Name, Length, LastWriteTime
+          Get-FileHash "CodexTimeZoneLauncher.exe" -Algorithm SHA256
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Codex-TimeZone-Launcher-Windows-x64
+          path: CodexTimeZoneLauncher.exe
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  publish-release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - build-macos
+      - build-windows
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: Codex-TimeZone-Launcher-macOS-arm64
+          path: release-assets
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: Codex-TimeZone-Launcher-Windows-x64
+          path: release-assets
+
+      - name: Generate SHA-256 checksums
+        working-directory: release-assets
+        run: sha256sum * > SHA256SUMS.txt
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            "release-assets/Codex-TimeZone-Launcher-macOS-arm64.zip" \
+            "release-assets/CodexTimeZoneLauncher.exe" \
+            "release-assets/SHA256SUMS.txt" \
+            --verify-tag \
+            --generate-notes \
+            --title "Codex 时区启动器 ${GITHUB_REF_NAME}"
