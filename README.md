@@ -55,7 +55,7 @@ Codex 时区启动器是一款面向 Windows 和 macOS 的桌面工具。它会�
 
 ### 环境要求
 
-- Node.js 20 或更高版本
+- Node.js 22.12 或更高版本、npm 10 或更高版本
 - Rust stable 工具链
 - Windows：Visual Studio Build Tools、Windows SDK、WebView2 Runtime
 - macOS：Xcode Command Line Tools
@@ -116,14 +116,13 @@ npm run build:frontend
 ```text
 .
 ├─ CodexTimeZoneLauncher.exe       # Windows 便携版产物
+├─ Codex 时区启动器.app/           # macOS 应用产物
 ├─ README.md
-├─ docs/                           # 设计说明与 UI 验收截图
-├─ environment/                    # 本地构建缓存（不纳入版本控制）
 └─ resource/
+   ├─ backend/                     # 公共逻辑及 Windows、macOS 平台实现
    ├─ src/                         # Vue 页面、组件、composables 与样式
-   ├─ src-tauri/                   # Windows Tauri/Rust 后端
-   ├─ macos/                       # macOS 原生后端与构建资源
-   ├─ scripts/                     # 开发、启动和发布脚本
+   ├─ src-tauri/                   # Tauri/Rust 应用入口与配置
+   ├─ desktop.mjs                  # 跨平台开发、构建和启动脚本
    └─ package.json
 ```
 
