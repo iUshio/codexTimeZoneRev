@@ -145,6 +145,7 @@ jobs:
             "release-assets/Codex-TimeZone-Launcher-macOS-arm64.zip" \
             "release-assets/CodexTimeZoneLauncher.exe" \
             "release-assets/SHA256SUMS.txt" \
+            --repo "${GITHUB_REPOSITORY}" \
             --verify-tag \
             --generate-notes \
             --title "Codex 时区启动器 ${GITHUB_REF_NAME}"
