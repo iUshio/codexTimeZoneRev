@@ -30,7 +30,11 @@ docs/
 docs/ui-review/source-backup-*/
 docs/ui-review/.screenshot-profile/
 
-# 不上传其他临时归档或安装包；根目录正式 exe 与 macOS app 保留
+# 桌面构建产物由 GitHub Actions / Releases 分发，不提交到源码树
+/CodexTimeZoneLauncher.exe
+/Codex 时区启动器.app/
+
+# 不上传其他临时归档或安装包
 **/*.dmg
 **/*.zip
 **/*.7z
