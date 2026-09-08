@@ -4,23 +4,34 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "dev:mac": "node desktop.mjs dev mac",
+    "dev:win": "node desktop.mjs dev win",
+    "build:mac": "node desktop.mjs build mac",
+    "build:win": "node desktop.mjs build win",
+    "start:mac": "node desktop.mjs start mac",
+    "start:win": "node desktop.mjs start win",
+    "dev:frontend": "vite",
+    "build:frontend": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },
   "dependencies": {
     "@macvue/core": "0.1.0",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-dialog": "^2",
-    "@tauri-apps/plugin-opener": "^2",
-    "vue": "^3.5.13"
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-clipboard-manager": "2.3.3",
+    "@tauri-apps/plugin-dialog": "2.7.3",
+    "@tauri-apps/plugin-opener": "2.5.5",
+    "vue": "3.5.42"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
-    "@vitejs/plugin-vue": "^6.0.7",
-    "typescript": "~6.0.3",
-    "vite": "^8.0.16",
-    "vue-tsc": "^3.3.5"
+    "@tauri-apps/cli": "2.11.4",
+    "@vitejs/plugin-vue": "6.0.8",
+    "typescript": "6.0.3",
+    "vite": "8.2.2",
+    "vue-tsc": "3.3.11"
+  },
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10"
   }
 }

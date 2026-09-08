@@ -1,0 +1,83 @@
+/* Internal selectors below are intentionally isolated for the locked MacVue 0.1.0 DOM. */
+.app-select,
+.app-select .macvue-pop-up-button-anchor,
+.app-select .macvue-pop-up-button {
+  display: block;
+  min-width: 0;
+  width: 100%;
+}
+
+.app-select .macvue-pop-up-button {
+  display: flex;
+  justify-content: space-between;
+}
+
+.toolbar-appearance .app-select,
+.toolbar-appearance .macvue-pop-up-button-anchor,
+.toolbar-appearance .macvue-pop-up-button {
+  width: 100%;
+}
+
+#appearance-menu-root .macvue-pop-up-button-menu {
+  width: min(176px, calc(100vw - 24px));
+  min-width: min(160px, calc(100vw - 24px));
+}
+
+#timezone-menu-root .macvue-pop-up-button-menu {
+  width: min(max(var(--app-select-trigger-width, 360px), 360px), 560px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+}
+
+#offset-menu-root .macvue-pop-up-button-menu {
+  width: min(208px, calc(100vw - 24px));
+  min-width: min(180px, calc(100vw - 24px));
+}
+
+#appearance-menu-root .macvue-pop-up-button-viewport,
+#timezone-menu-root .macvue-pop-up-button-viewport,
+#offset-menu-root .macvue-pop-up-button-viewport {
+  max-height: min(360px, 50vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+#timezone-menu-root .macvue-pop-up-button-item {
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding-block: 6px;
+}
+
+#timezone-menu-root .macvue-pop-up-button-item-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  white-space: normal;
+}
+
+.app-select-item-label,
+.app-select-item-detail {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.app-select-item-detail {
+  color: var(--app-text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.path-row .macvue-text-field {
+  min-width: 0;
+  width: 100%;
+}
+
+.setting-control .macvue-segmented-control {
+  max-width: 100%;
+}
+
+.app-toolbar .macvue-pop-up-button-menu,
+.workspace-scroll .macvue-pop-up-button-menu {
+  color: var(--app-text);
+}

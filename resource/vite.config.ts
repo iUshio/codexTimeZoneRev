@@ -25,8 +25,8 @@ export default defineConfig(() => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // Native code is watched by Tauri; dependency caches are not frontend input.
+      ignored: ["**/src-tauri/**", "**/backend/**", "**/environment/**"],
     },
   },
 }));

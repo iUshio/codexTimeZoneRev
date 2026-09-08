@@ -1,0 +1,137 @@
+[
+  {
+    "label": "中国标准时间（上海 / 北京）",
+    "id": "Asia/Shanghai",
+    "windowsId": "China Standard Time"
+  },
+  {
+    "label": "太平洋时间（洛杉矶）",
+    "id": "America/Los_Angeles",
+    "windowsId": "Pacific Standard Time"
+  },
+  {
+    "label": "山地时间（丹佛）",
+    "id": "America/Denver",
+    "windowsId": "Mountain Standard Time"
+  },
+  {
+    "label": "美国中部时间（芝加哥）",
+    "id": "America/Chicago",
+    "windowsId": "Central Standard Time"
+  },
+  {
+    "label": "美国东部时间（纽约）",
+    "id": "America/New_York",
+    "windowsId": "Eastern Standard Time"
+  },
+  {
+    "label": "亚利桑那（菲尼克斯）",
+    "id": "America/Phoenix",
+    "windowsId": "US Mountain Standard Time"
+  },
+  {
+    "label": "阿拉斯加",
+    "id": "America/Anchorage",
+    "windowsId": "Alaskan Standard Time"
+  },
+  {
+    "label": "夏威夷",
+    "id": "Pacific/Honolulu",
+    "windowsId": "Hawaiian Standard Time"
+  },
+  {
+    "label": "英国（伦敦）",
+    "id": "Europe/London",
+    "windowsId": "GMT Standard Time"
+  },
+  {
+    "label": "法国（巴黎）",
+    "id": "Europe/Paris",
+    "windowsId": "Romance Standard Time"
+  },
+  {
+    "label": "德国（柏林）",
+    "id": "Europe/Berlin",
+    "windowsId": "W. Europe Standard Time"
+  },
+  {
+    "label": "俄罗斯（莫斯科）",
+    "id": "Europe/Moscow",
+    "windowsId": "Russian Standard Time"
+  },
+  {
+    "label": "日本（东京）",
+    "id": "Asia/Tokyo",
+    "windowsId": "Tokyo Standard Time"
+  },
+  {
+    "label": "韩国（首尔）",
+    "id": "Asia/Seoul",
+    "windowsId": "Korea Standard Time"
+  },
+  {
+    "label": "中国香港",
+    "id": "Asia/Hong_Kong",
+    "windowsId": "China Standard Time"
+  },
+  {
+    "label": "中国台北",
+    "id": "Asia/Taipei",
+    "windowsId": "Taipei Standard Time"
+  },
+  {
+    "label": "新加坡",
+    "id": "Asia/Singapore",
+    "windowsId": "Singapore Standard Time"
+  },
+  {
+    "label": "印度（加尔各答）",
+    "id": "Asia/Kolkata",
+    "windowsId": "India Standard Time"
+  },
+  {
+    "label": "尼泊尔（加德满都）",
+    "id": "Asia/Kathmandu",
+    "windowsId": "Nepal Standard Time"
+  },
+  {
+    "label": "阿联酋（迪拜）",
+    "id": "Asia/Dubai",
+    "windowsId": "Arabian Standard Time"
+  },
+  {
+    "label": "泰国（曼谷）",
+    "id": "Asia/Bangkok",
+    "windowsId": "SE Asia Standard Time"
+  },
+  {
+    "label": "澳大利亚（悉尼）",
+    "id": "Australia/Sydney",
+    "windowsId": "AUS Eastern Standard Time"
+  },
+  {
+    "label": "澳大利亚（阿德莱德）",
+    "id": "Australia/Adelaide",
+    "windowsId": "Cen. Australia Standard Time"
+  },
+  {
+    "label": "澳大利亚（珀斯）",
+    "id": "Australia/Perth",
+    "windowsId": "W. Australia Standard Time"
+  },
+  {
+    "label": "新西兰（奥克兰）",
+    "id": "Pacific/Auckland",
+    "windowsId": "New Zealand Standard Time"
+  },
+  {
+    "label": "巴西（圣保罗）",
+    "id": "America/Sao_Paulo",
+    "windowsId": "E. South America Standard Time"
+  },
+  {
+    "label": "协调世界时",
+    "id": "Etc/UTC",
+    "windowsId": "UTC"
+  }
+]

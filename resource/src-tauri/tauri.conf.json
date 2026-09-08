@@ -4,35 +4,29 @@
   "version": "0.1.0",
   "identifier": "com.fei-away.codextimezone",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "npm run build:frontend",
+    "beforeBuildCommand": "npm run build:frontend",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Codex 时区启动器",
-        "width": 1180,
-        "height": 820,
+        "width": 1280,
+        "height": 900,
         "minWidth": 760,
-        "minHeight": 600,
-        "center": true
+        "minHeight": 640,
+        "resizable": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src 'self' ipc: http://ipc.localhost https://ip125.com https://r.inews.qq.com https://myip.ipip.net https://pubstatic.b0.upaiyun.com https://www.cloudflare-cn.com https://checkip.amazonaws.com https://workers.dev https://1.0.0.1 https://api4.ipify.org https://api.ip.sb; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ]
+    "targets": "all"
   }
 }

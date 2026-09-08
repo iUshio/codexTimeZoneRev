@@ -1,9 +1,37 @@
+# 本地运行数据与用户配置
 data/
+*.local
+.env
+.env.*
+!.env.example
+
+# 依赖、构建目录与本地缓存
+environment/
 resource/node_modules/
 resource/dist/
-resource/src-tauri/target/
-resource/src-tauri/resources/CodexTimeZoneBackend.exe
+resource/**/target/
+resource/**/build/
+resource/**/.cache/
+resource/**/.vite/
+resource/**/coverage/
+
+# 开发过程文件
+开发日志.md
 *.tmp
 *.log
-.DS_Store
+*.bak
+*.swp
 Thumbs.db
+.DS_Store
+
+# UI 审查期间生成的本地源码备份和截图运行缓存
+docs/
+docs/ui-review/source-backup-*/
+docs/ui-review/.screenshot-profile/
+
+# 不上传其他临时归档或安装包；根目录正式 exe 与 macOS app 保留
+**/*.dmg
+**/*.zip
+**/*.7z
+**/*.tar
+**/*.tar.gz

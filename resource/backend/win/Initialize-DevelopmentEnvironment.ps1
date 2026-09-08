@@ -5,7 +5,7 @@ if ($development) {
     $cargo = Join-Path $development 'Rust\cargo'
     if (Test-Path $rustup) { $env:RUSTUP_HOME = $rustup }
     if (Test-Path $cargo) { $env:CARGO_HOME = $cargo }
-    $paths = @('NodeJS', 'pnpm', 'Git\cmd', 'Rust\cargo\bin') |
+    $paths = @('NodeJS', 'Git\cmd', 'Rust\cargo\bin') |
         ForEach-Object { Join-Path $development $_ } |
         Where-Object { Test-Path $_ }
     if ($paths) { $env:PATH = ($paths -join ';') + ';' + $env:PATH }
@@ -13,12 +13,13 @@ if ($development) {
 if ($env:CODEX_TZ_PROXY) {
     $env:HTTP_PROXY = $env:CODEX_TZ_PROXY
     $env:HTTPS_PROXY = $env:CODEX_TZ_PROXY
+    $env:CARGO_HTTP_PROXY = $env:CODEX_TZ_PROXY
 }
 $vsDevCmd = if ($development) { Join-Path $development 'VisualStudioBuildTools\Common7\Tools\VsDevCmd.bat' } else { '' }
-if (-not (Test-Path $vsDevCmd)) {
+if (-not $vsDevCmd -or -not (Test-Path -LiteralPath $vsDevCmd)) {
     $vsDevCmd = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat'
 }
-if (-not (Test-Path $vsDevCmd)) { throw '未找到 Visual Studio 2022 Build Tools；请安装“使用 C++ 的桌面开发”工作负载。' }
+if (-not (Test-Path -LiteralPath $vsDevCmd)) { throw 'Visual Studio 2022 Build Tools not found. Install the Desktop development with C++ workload.' }
 cmd /s /c "`"$vsDevCmd`" -arch=x64 -host_arch=x64 >nul && set" | ForEach-Object {
     if ($_ -match '^([^=]+)=(.*)$') { Set-Item -Path "Env:$($matches[1])" -Value $matches[2] }
 }
