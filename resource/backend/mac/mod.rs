@@ -1,4 +1,4 @@
-use crate::common::{Settings, zones, tz, load, save, settings, endpoint_ready, wait_endpoint, run_logged, network_info};
+use crate::common::{Settings, zones, tz, load, save, endpoint_ready, wait_endpoint, run_logged, network_info};
 use serde_json::{json, Value};
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::{

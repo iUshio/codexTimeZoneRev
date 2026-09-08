@@ -28,8 +28,6 @@ function updateAppearance(value: string | number) {
         <MacLabel as="h1" variant="headline">Codex 时区启动器</MacLabel>
         <p>仅影响 Codex，系统时区保持不变</p>
       </div>
-      <div class="appearance-control">
-        <span>外观</span>
       <div class="toolbar-appearance">
         <span>外观</span>
         <AppSelect
@@ -42,7 +40,6 @@ function updateAppearance(value: string | number) {
         >
           <template #value>{{ appearanceLabel }}</template>
         </AppSelect>
-      </div>
       </div>
     </div>
   </header>
