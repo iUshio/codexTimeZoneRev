@@ -39,6 +39,7 @@
   max-height: min(360px, 50vh);
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 #timezone-menu-root .macvue-pop-up-button-item {

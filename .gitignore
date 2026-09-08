@@ -17,6 +17,7 @@ resource/**/coverage/
 
 # 开发过程文件
 开发日志.md
+GitHub上传指南.md
 *.tmp
 *.log
 *.bak

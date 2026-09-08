@@ -46,6 +46,10 @@
   scrollbar-gutter: stable;
 }
 
+.workspace-scroll--select-open {
+  overflow: hidden;
+}
+
 .workspace-content {
   padding-block: 20px 24px;
 }
