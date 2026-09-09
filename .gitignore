@@ -15,8 +15,10 @@ resource/**/.cache/
 resource/**/.vite/
 resource/**/coverage/
 
+# 本地开发文档（操作手册、开发日志、截图与审查备份均不上传）
+docs/
+
 # 开发过程文件
-开发日志.md
 GitHub上传指南.md
 *.tmp
 *.log
@@ -24,11 +26,6 @@ GitHub上传指南.md
 *.swp
 Thumbs.db
 .DS_Store
-
-# UI 审查期间生成的本地源码备份和截图运行缓存
-docs/
-docs/ui-review/source-backup-*/
-docs/ui-review/.screenshot-profile/
 
 # 桌面构建产物由 GitHub Actions / Releases 分发，不提交到源码树
 /CodexTimeZoneLauncher.exe

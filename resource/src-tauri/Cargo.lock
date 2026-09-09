@@ -509,7 +509,7 @@ dependencies = [
 
 [[package]]
 name = "codextimezonerev"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "quick-xml 0.42.0",
  "serde",
