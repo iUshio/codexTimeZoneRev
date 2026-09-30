@@ -16,6 +16,12 @@
 
 在 [GitHub Releases](https://github.com/iUshio/codexTimeZoneRev/releases) 下载对应平台的 ZIP。Windows 解压后运行 `codex_timezone.exe`，并保留同目录的 DLL 和 `data` 资源。macOS 解压后运行应用；当前 macOS 包仅使用临时签名，尚未完成 Developer ID 签名与公证，系统可能要求用户手动确认打开。
 
+### Windows 启动排错
+
+对于 Microsoft Store / MSIX 安装的客户端，启动器会在新进程执行前核对程序包与应用身份。若提示 `15700`（进程没有程序包标识符），本次新进程会被取消；请检查客户端安装状态及其 WindowsApps 目录权限。不要通过向普通用户授予整个 WindowsApps 目录执行权限来处理此错误，这可能破坏 Windows 的包身份启动机制。启动器不会自动修改这些权限。
+
+启动阶段、目标版本、所选时区和原生错误会写入启动器旁的 `data/launch.log`，不记录完整环境变量。普通启动提示仅确认进程已启动；客户端窗口就绪及最终显示的时区仍需实际确认。
+
 ## 从源码构建
 
 需要 Flutter 3.47.5（Dart 3.13.4）、Rust stable。Windows 还需要 Visual Studio C++ 桌面工具链；macOS 需要完整 Xcode。将 Flutter 的 `bin` 与 Cargo 加入 `PATH`，或在 Windows 传入 `-FlutterSdk`。

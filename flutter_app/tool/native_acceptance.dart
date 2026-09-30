@@ -77,6 +77,38 @@ Future<void> main() async {
   final report = File(p.join(p.dirname(executable), 'observed.txt'));
   final launch = await backend.call('launch', {'settings': settings});
   check(launch['launched'] == true, 'Fixture did not launch');
+  check(
+    launch['windowReadyVerified'] == false,
+    'Process survival must not claim that the client window is ready',
+  );
+  check(
+    launch['identityVerified'] == false &&
+        (launch['target'] as Map)['package'] == null,
+    'Unpackaged fixture was incorrectly reported as a verified MSIX app',
+  );
+  final launchLog = File(launch['logPath'] as String);
+  check(
+    p.equals(launchLog.path, p.join(data.path, 'launch.log')),
+    'Launch diagnostics escaped the isolated data directory',
+  );
+  final logText = launchLog.readAsStringSync();
+  final stages = logText
+      .split('\n')
+      .where((line) => line.trim().isNotEmpty)
+      .map((line) => (jsonDecode(line) as Map)['stage'])
+      .toList();
+  check(
+    stages.contains('created_suspended') &&
+        stages.indexOf('identity_checked') >
+            stages.indexOf('created_suspended') &&
+        stages.indexOf('resumed') > stages.indexOf('identity_checked') &&
+        stages.last == 'process_started',
+    'Launch stage order does not prove identity was checked before resume',
+  );
+  check(
+    !logText.contains('fixture-parent'),
+    'Launch log dumped parent environment values',
+  );
   final observed = report.readAsStringSync();
   check(observed.contains('TZ=Asia/Shanghai'), 'Child process TZ mismatch');
   check(
@@ -111,6 +143,32 @@ Future<void> main() async {
     'Failed validation unexpectedly saved settings',
   );
 
+  // A package-looking path must never fall back to an ordinary executable when
+  // no matching package is registered. This fixture is never launched.
+  final unregistered = Directory(p.join(root, 'unregistered-package'))
+    ..createSync();
+  final unregisteredExe = p.join(unregistered.path, 'Codex.exe');
+  File(executable).copySync(unregisteredExe);
+  File(p.join(unregistered.path, 'icudtl.dat')).writeAsStringSync('');
+  File(p.join(unregistered.path, 'AppxManifest.xml')).writeAsStringSync(
+    '<Package><Applications><Application Id="App" '
+    'Executable="Codex.exe" /></Applications></Package>',
+  );
+  await fails(
+    backend.call('launch', {
+      'settings': {...settings, 'executable': unregisteredExe},
+    }),
+    '注册',
+  );
+  check(
+    !File(p.join(unregistered.path, 'observed.txt')).existsSync(),
+    'Unregistered package-looking fixture executed',
+  );
+  check(
+    settingsFile.readAsStringSync() == persisted,
+    'Rejected package-looking target changed saved settings',
+  );
+
   settingsFile.writeAsStringSync('{invalid json');
   await fails(backend.call('bootstrap'), '设置文件无效');
   check(
@@ -124,6 +182,6 @@ Future<void> main() async {
   });
   check(proxy['proxy'] is String, 'System proxy lookup failed');
   stdout.writeln(
-    'Windows native acceptance passed: legacy bootstrap, isolated save, path validation, actual fixture launch, child TZ, environment cleanup, duplicate launch rejection, invalid save/launch protection, bootstrap retry, system proxy lookup.',
+    'Windows native acceptance passed: legacy bootstrap, isolated save, path validation, suspended fixture launch, identity gate ordering, child TZ, environment cleanup, truthful process status, scoped diagnostics, duplicate launch rejection, unregistered package rejection, invalid save/launch protection, bootstrap retry, system proxy lookup.',
   );
 }

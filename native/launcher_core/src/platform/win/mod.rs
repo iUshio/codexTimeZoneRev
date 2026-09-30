@@ -1,10 +1,8 @@
 use crate::common::{endpoint_ready, load, run_logged, save, settings, tz, wait_endpoint, zones, network_info, Settings};
-use quick_xml::events::Event;
 use serde_json::{json, Value};
-use std::{fs, mem::size_of, os::windows::{ffi::OsStrExt, process::CommandExt}, path::{Path, PathBuf}, process::{Command, Stdio}, time::Duration};
+use std::{ffi::OsString, fs, mem::size_of, os::windows::{ffi::OsStrExt, process::CommandExt}, path::{Path, PathBuf}, process::{Command, Stdio}, time::Duration};
 use ::windows::{
-    core::{w, GUID, HSTRING, Interface, PCWSTR, PWSTR},
-    Management::Deployment::PackageManager,
+    core::{w, GUID, Interface, PCWSTR, PWSTR},
     Win32::{
         Foundation::{CloseHandle, HANDLE},
         System::{
@@ -17,6 +15,10 @@ use ::windows::{
         UI::Shell::{FOLDERID_Desktop, FOLDERID_LocalAppData, IShellLinkW, KF_FLAG_DEFAULT, SHGetKnownFolderPath, ShellLink},
     },
 };
+
+mod launch_log;
+mod process;
+mod target;
 
 struct Runtime;
 impl Runtime {
@@ -56,65 +58,8 @@ fn validate(path: &str) -> Result<PathBuf, String> {
     }
     Ok(path)
 }
-fn manifest_executable(root: &Path) -> Option<PathBuf> {
-    let root = fs::canonicalize(root).ok()?;
-    let text = fs::read_to_string(root.join("AppxManifest.xml")).ok()?;
-    let mut reader = quick_xml::Reader::from_str(&text);
-    reader.config_mut().trim_text(true);
-    let mut executable_name = None;
-    loop {
-        match reader.read_event().ok()? {
-            Event::Start(element) if element.local_name().as_ref() == "Application" => {
-                let mut is_app = false;
-                let mut executable = None;
-                for attribute in element.attributes().flatten() {
-                    match attribute.key.local_name().as_ref() {
-                        "Id" => is_app = attribute.value.as_ref() == "App",
-                        "Executable" => executable = Some(attribute.value.into_owned()),
-                        _ => {}
-                    }
-                }
-                if is_app {
-                    executable_name = executable;
-                    break;
-                }
-            }
-            Event::Eof => break,
-            _ => {}
-        }
-    }
-    let executable = fs::canonicalize(root.join(executable_name?.replace('/', "\\"))).ok()?;
-    if !executable.starts_with(&root) { return None; }
-    validate(&executable.to_string_lossy()).ok()
-}
 fn discover() -> String {
-    let mut candidates = Vec::new();
-    if let Ok(manager) = PackageManager::new() {
-        if let Ok(packages) = manager.FindPackagesByUserSecurityId(&HSTRING::new()) {
-            for package in packages {
-                let found = || -> ::windows::core::Result<_> {
-                    let id = package.Id()?;
-                    let name = id.Name()?.to_string_lossy();
-                    let v = id.Version()?;
-                    let root = package.InstalledLocation()?.Path()?.to_string_lossy();
-                    Ok((name, (v.Major, v.Minor, v.Build, v.Revision), PathBuf::from(root)))
-                };
-                if let Ok((name, version, root)) = found() {
-                    if name.eq_ignore_ascii_case("OpenAI.Codex") { candidates.push((version, root)); }
-                }
-            }
-        }
-    }
-    candidates.sort_by(|a, b| b.0.cmp(&a.0));
-    for (_, root) in candidates {
-        if let Some(path) = manifest_executable(&root) { return path.to_string_lossy().into_owned(); }
-    }
-    if let Ok(local) = known_folder(&FOLDERID_LocalAppData) {
-        for relative in [r"Programs\Codex\Codex.exe", r"Codex\Codex.exe", r"Programs\OpenAI\Codex\Codex.exe"] {
-            if let Ok(path) = validate(&local.join(relative).to_string_lossy()) { return path.to_string_lossy().into_owned(); }
-        }
-    }
-    String::new()
+    target::discover().map(|target| target.executable.to_string_lossy().into_owned()).unwrap_or_default()
 }
 fn same_path(a: &Path, b: &Path) -> bool {
     let normalize = |p: &Path| fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()).to_string_lossy().trim_start_matches(r"\\?\").to_lowercase();
@@ -288,27 +233,59 @@ fn reapply_skin(dir: &Path, s: Settings) -> Result<Value, String> {
     apply_skin(dir, &skin_script(&root, &state)?, skin_port(&state)?)
 }
 fn launch(dir: &Path, s: Settings) -> Result<Value, String> {
-    tz(&s)?;
-    let path = validate(&if s.executable.trim().is_empty() { discover() } else { s.executable.clone() })?;
+    let mut log = launch_log::LaunchLog::new(dir)?;
+    let result = launch_inner(dir, s, &mut log);
+    if let Err(error) = &result {
+        let _ = log.record("failed", json!({"error":error}));
+    }
+    result.map_err(|error| format!("{error}\n启动日志：{}", log.path.display()))
+}
+fn launch_inner(dir: &Path, s: Settings, log: &mut launch_log::LaunchLog) -> Result<Value, String> {
+    let timezone = tz(&s)?;
+    log.record("requested", json!({"timezone":timezone,"dreamSkinCompatible":s.dream_skin_compatible}))?;
+    let target = if s.executable.trim().is_empty() {
+        target::discover().ok_or("未找到 Codex 桌面客户端，请手动选择。")?
+    } else { target::resolve(&s.executable)? };
+    log.record("target_resolved", json!({"target":target}))?;
+    let path = &target.executable;
     if is_running(&path)? { return Err("客户端正在运行，请保存工作并完全退出 Codex 后重试。".into()); }
-    let mut cmd = Command::new(&path);
-    cmd.env("TZ", tz(&s)?).env_remove("ELECTRON_RUN_AS_NODE").current_dir(path.parent().ok_or("客户端目录无效")?)
-        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).creation_flags(0x08000000);
+    let mut arguments: Vec<OsString> = Vec::new();
     let skin = if s.dream_skin_compatible {
         let root = skin_root()?; let state = skin_state(&root)?; let port = skin_port(&state)?; let script = skin_script(&root, &state)?;
         let profile = state["profilePath"].as_str().filter(|s| !s.trim().is_empty()).map(PathBuf::from).unwrap_or_else(|| root.join("cdp-profile"));
         if !profile.is_absolute() { return Err("Dream Skin 用户目录必须是绝对路径。".into()); }
         let listener = std::net::TcpListener::bind(("127.0.0.1", port)).map_err(|_| "Dream Skin 调试端口已被占用。")?; drop(listener);
-        cmd.arg("--remote-debugging-address=127.0.0.1").arg(format!("--remote-debugging-port={port}")).arg(format!("--user-data-dir={}", profile.display()));
+        arguments.push("--remote-debugging-address=127.0.0.1".into());
+        arguments.push(format!("--remote-debugging-port={port}").into());
+        arguments.push(format!("--user-data-dir={}", profile.display()).into());
         Some((script, port))
     } else { None };
+    let mut child = process::Child::suspended(path, &arguments, &timezone)?;
+    let observed = child.identity();
+    log.record("created_suspended", json!({"pid":child.id,"identity":observed}))?;
+    if let Err(error) = process::require_identity(target.package.as_ref(), &observed) {
+        let cleanup = child.abort();
+        let _ = log.record("identity_rejected", json!({"pid":child.id,"error":error,"cleanupError":cleanup.as_ref().err()}));
+        return Err(match cleanup { Ok(()) => error, Err(cleanup) => format!("{error}\n{cleanup}") });
+    }
+    log.record("identity_checked", json!({"required":target.package.is_some(),"pid":child.id}))?;
+    // Invalid/missing identity never persists new launch settings or runs app code.
     save(dir, &s)?;
-    let mut child = cmd.spawn().map_err(|e| format!("无法启动客户端：{e}"))?;
-    std::thread::sleep(Duration::from_millis(800));
-    if let Some(status) = child.try_wait().map_err(|e| e.to_string())? { return Err(format!("客户端启动后提前退出：{status}。")); }
-    std::thread::spawn(move || { let _ = child.wait(); });
-    if let Some((script, port)) = skin { wait_endpoint(port, Duration::from_secs(45))?; apply_skin(dir, &script, port)?; }
-    Ok(json!({"launched":true,"message":if s.dream_skin_compatible { "Codex 已按所选时区启动，Dream Skin 已应用皮肤。" } else { "Codex 已按所选时区启动（Dream Skin 兼容启动未开启）。" }}))
+    child.resume()?;
+    let mut warnings = Vec::new();
+    if let Err(error) = log.record("resumed", json!({"pid":child.id})) { warnings.push(error); }
+    if let Some(status) = child.exit_within(800).map_err(|error| format!("客户端进程已恢复执行，但{error}"))? {
+        return Err(format!("客户端进程在启动后提前退出（退出代码 {status:#x}），尚未确认窗口就绪。"));
+    }
+    if let Some((script, port)) = skin {
+        wait_endpoint(port, Duration::from_secs(45)).map_err(|error| format!("客户端进程已启动，但{error}"))?;
+        apply_skin(dir, &script, port).map_err(|error| format!("客户端进程已启动，但{error}"))?;
+    }
+    if let Err(error) = log.record("process_started", json!({"pid":child.id,"windowReadyVerified":false,"skinApplied":s.dream_skin_compatible})) { warnings.push(error); }
+    warnings.dedup();
+    let mut message = if s.dream_skin_compatible { "Codex 进程已按所选时区启动，Dream Skin 已应用；尚未确认客户端窗口就绪。" } else { "Codex 进程已按所选时区启动；尚未确认客户端窗口就绪。" }.to_string();
+    if !warnings.is_empty() { message.push_str(&format!("\n进程保持运行；日志记录不完整：{}", warnings.join("；"))); }
+    Ok(json!({"launched":true,"pid":child.id,"windowReadyVerified":false,"identityVerified":target.package.is_some(),"target":target,"logPath":log.path,"warnings":warnings,"message":message}))
 }
 pub fn execute(command: &str, payload: Value) -> Result<Value, String> {
     let _runtime = Runtime::new()?;
@@ -316,8 +293,8 @@ pub fn execute(command: &str, payload: Value) -> Result<Value, String> {
     match command {
         "network_info" => network_info(),
         "bootstrap" => Ok(json!({"settings":load_migrated(&dir)?,"zones":zones(),"localZone":"UTC","detected":discover(),"platform":"windows","settingsPath":dir.join("settings.json")})),
-        "discover" => Ok(json!({"path":discover()})),
-        "validate" => Ok(json!({"path":validate(payload["path"].as_str().unwrap_or_default())?})),
+        "discover" => { let target = target::discover(); Ok(json!({"path":target.as_ref().map(|target| target.executable.to_string_lossy().into_owned()).unwrap_or_default(),"target":target})) },
+        "validate" => { let target = target::resolve(payload["path"].as_str().unwrap_or_default())?; Ok(json!({"path":target.executable,"target":target})) },
         "save" => { save(&dir, &settings(&payload, &dir)?)?; Ok(json!({"path":dir.join("settings.json"),"message":format!("设置已保存到 {}", dir.join("settings.json").display())})) },
         "launch" => launch(&dir, settings(&payload, &dir)?),
         "reapply_dream_skin" => {
