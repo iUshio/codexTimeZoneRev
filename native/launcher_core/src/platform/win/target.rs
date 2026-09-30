@@ -194,9 +194,46 @@ pub(super) fn discover() -> Option<LaunchTarget> {
     None
 }
 
+// Recognize only a Store Codex path. Ordinary manual installations keep their
+// selected executable, including when that path becomes invalid.
+fn store_codex_path(path: &str) -> bool {
+    let text = path.trim().trim_matches('"').replace('/', "\\").to_lowercase();
+    let parts: Vec<_> = text.split('\\').collect();
+    parts.windows(2).any(|pair| {
+        if pair[0] != "windowsapps" { return false; }
+        let Some(name) = pair[1].strip_prefix("openai.codex_") else { return false; };
+        let Some(version_arch) = name.strip_suffix("__2p2nqsd0c76g0") else { return false; };
+        let Some((version, arch)) = version_arch.rsplit_once('_') else { return false; };
+        let numbers: Vec<_> = version.split('.').collect();
+        ["x64", "arm64"].contains(&arch) && numbers.len() == 4 &&
+            numbers.iter().all(|n| !n.is_empty() && n.parse::<u16>().is_ok())
+    })
+}
+
+pub(super) fn for_launch(path: &str) -> Result<LaunchTarget, String> {
+    if path.trim().is_empty() || store_codex_path(path) {
+        let target = discover().ok_or("未找到当前已安装的 Codex，请重新选择客户端。")?;
+        if !path.trim().is_empty() && target.package.is_none() {
+            return Err("原 Store 客户端已不可用，请重新选择客户端。".into());
+        }
+        Ok(target)
+    } else {
+        resolve(path)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stale_store_paths_follow_updates_but_manual_paths_do_not() {
+        assert!(store_codex_path(r"\\?\C:\Program Files\WindowsApps\OpenAI.Codex_26.928.2636.0_x64__2p2nqsd0c76g0\app\ChatGPT.exe"));
+        assert!(store_codex_path(r"C:\Program Files\WindowsApps\OpenAI.Codex_99.1.2.3_arm64__2p2nqsd0c76g0\app\Codex.exe"));
+        for path in [r"C:\Custom\Codex.exe", r"C:\WindowsApps\OpenAI.Codex_bad_x64__2p2nqsd0c76g0\app\ChatGPT.exe", r"C:\WindowsApps\OpenAI.Codex_1.2.3.4_x64__other\app\ChatGPT.exe"] {
+            assert!(!store_codex_path(path));
+        }
+    }
 
     #[test]
     fn manifest_keeps_identity_and_accepts_non_default_application_id() {

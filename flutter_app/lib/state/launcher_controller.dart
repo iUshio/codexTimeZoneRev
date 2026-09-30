@@ -19,6 +19,8 @@ class LauncherController extends ChangeNotifier {
   bool bootstrapFailed = false;
   bool _disposed = false;
   bool _loading = false;
+  String? repairPackage;
+  String? repairLogPath;
 
   bool get busy => busyCommand != null;
   bool get editable => !initializing && !bootstrapFailed && !busy;
@@ -50,6 +52,8 @@ class LauncherController extends ChangeNotifier {
   void update(LauncherSettings next) {
     if (!editable) return;
     settings = next;
+    repairPackage = null;
+    repairLogPath = null;
     _emit();
   }
 
@@ -103,6 +107,7 @@ class LauncherController extends ChangeNotifier {
       if (path == null || _disposed) return;
       final data = await backend.call('validate', {'path': path});
       settings = settings.copyWith(executable: data['path'] as String);
+      repairPackage = null;
       report('客户端路径已更新，尚未保存。');
     } catch (e) {
       report('无法使用所选客户端路径。', detail: e.toString());
@@ -117,13 +122,15 @@ class LauncherController extends ChangeNotifier {
     if (![
       'save',
       'launch',
+      'repair_launch',
       'create_shortcut',
       'launch_dream_skin',
       'reapply_dream_skin',
     ].contains(command)) {
       return false;
     }
-    if (['save', 'launch'].contains(command) && validationError != null) {
+    if (['save', 'launch', 'repair_launch'].contains(command) &&
+        validationError != null) {
       report('时区设置无效。', detail: validationError);
       return false;
     }
@@ -132,22 +139,62 @@ class LauncherController extends ChangeNotifier {
       return false;
     }
     final submitted = settings;
+    final expectedPackage = repairPackage;
+    if (command == 'repair_launch' && expectedPackage == null) return false;
+    if (command == 'launch') repairPackage = null;
     busyCommand = command;
     report(switch (command) {
       'save' => '正在保存设置…',
-      'launch' => '正在保存设置并启动 Codex…',
+      'launch' => '正在识别当前版本、检查身份并启动 Codex…',
+      'repair_launch' => '正在检查并修复，请确认 Windows 管理员提示…',
       'create_shortcut' => '正在创建桌面快捷方式…',
       'launch_dream_skin' => '正在打开 Dream Skin…',
       _ => '正在重新注入 Dream Skin…',
     });
     try {
-      final data = await backend.call(command, {
+      var data = await backend.call(command, {
         'settings': submitted.toJson(),
+        if (command == 'repair_launch') 'packageFullName': expectedPackage,
       });
-      if (command == 'save' || command == 'launch') _saved = submitted;
+      if (command == 'repair_launch') {
+        if (data['cancelled'] == true) {
+          report(data['message'] as String? ?? '已取消修复，未启动客户端。');
+          return false;
+        }
+        if (data['healthy'] != true) throw StateError('修复后身份未通过，已停止启动。');
+        if (_disposed) return false;
+        report('身份检查通过，正在按所选时区重试启动…');
+        // Exactly one retry, with fresh native discovery and identity checking.
+        data = await backend.call('launch', {'settings': submitted.toJson()});
+      }
+      if (data['repairRequired'] == true) {
+        final target = data['target'] as Map<String, dynamic>;
+        final package = target['package'] as Map<String, dynamic>;
+        repairPackage = package['fullName'] as String;
+        detected = target['executable'] as String;
+        repairLogPath = data['logPath'] as String?;
+        report(data['message'] as String? ?? '当前客户端需要修复后才能启动。');
+        return false;
+      }
+      if (command == 'save' ||
+          command == 'launch' ||
+          command == 'repair_launch') {
+        final savedSettings = data['settings'];
+        settings = savedSettings is Map<String, dynamic>
+            ? LauncherSettings.fromJson(savedSettings)
+            : submitted;
+        _saved = settings;
+        repairPackage = null;
+        repairLogPath = null;
+        final target = data['target'];
+        if (target is Map<String, dynamic>) {
+          detected = target['executable'] as String;
+        }
+      }
       report(data['message'] as String? ?? '操作已完成。');
       return true;
     } catch (e) {
+      if (command == 'repair_launch') repairPackage = null;
       report('操作失败。', detail: e.toString());
       return false;
     } finally {

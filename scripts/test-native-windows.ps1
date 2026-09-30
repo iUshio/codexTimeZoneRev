@@ -1,5 +1,6 @@
 param(
-    [string]$FlutterSdk = ''
+    [string]$FlutterSdk = '',
+    [switch]$InstalledPreflight
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -40,4 +41,9 @@ try {
         $env:ELECTRON_RUN_AS_NODE = $previousElectron
     }
     Write-Output "Isolated evidence retained at: $fixtureRoot"
+    if ($InstalledPreflight) {
+        # Opt-in: package-owning user only. Never resumes the installed client.
+        Invoke-Checked $dart @('compile', 'exe', 'tool/launch_preflight_acceptance.dart', '-o', (Join-Path $fixtureRoot 'preflight.exe'))
+        Invoke-Checked (Join-Path $fixtureRoot 'preflight.exe') @()
+    }
 } finally { Pop-Location }

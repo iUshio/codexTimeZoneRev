@@ -8,24 +8,159 @@ class FakeBackend implements LauncherBackend {
   bool failBootstrap = false, failSave = false;
   Completer<Map<String, dynamic>>? pending;
   final List<String> calls = [];
+  final List<Map<String, dynamic>> payloads = [];
+  final Map<String, Map<String, dynamic>> responses = {};
+  String? failCommand;
   @override
   Future<Map<String, dynamic>> call(
     String command, [
     Map<String, dynamic> payload = const {},
   ]) async {
     calls.add(command);
+    payloads.add(payload);
     if (command == 'bootstrap') {
       if (failBootstrap) throw StateError('损坏配置');
       return const PreviewBackend().call(command);
     }
     if (command == 'validate') return {'path': payload['path']};
     if (failSave) throw StateError('保存失败');
+    if (command == failCommand) throw StateError('repair failed');
     if (pending != null) return pending!.future;
+    if (responses.containsKey(command)) return responses[command]!;
     return {'message': '完成'};
   }
 }
 
 void main() {
+  const needsRepair = <String, dynamic>{
+    'repairRequired': true,
+    'launched': false,
+    'target': {
+      'executable': r'C:\WindowsApps\current\app\ChatGPT.exe',
+      'package': {'fullName': 'OpenAI.Codex_1.2.3.4_x64__2p2nqsd0c76g0'},
+    },
+    'message': '需要修复',
+    'logPath': r'C:\launcher\data\launch.log',
+  };
+
+  Future<LauncherController> prepareRepair(FakeBackend backend) async {
+    backend.responses['launch'] = needsRepair;
+    final controller = LauncherController(backend);
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    controller.update(controller.settings.copyWith(zoneId: 'America/New_York'));
+    expect(await controller.action('launch'), isFalse);
+    expect(controller.repairPackage, isNotNull);
+    expect(controller.dirty, isTrue);
+    expect(backend.calls.where((c) => c == 'repair_launch'), isEmpty);
+    return controller;
+  }
+
+  test(
+    'repair is explicit, version bound and retries once with the same timezone',
+    () async {
+      final backend = FakeBackend();
+      final controller = await prepareRepair(backend);
+      backend.responses['repair_launch'] = {'healthy': true};
+      final saved = controller.settings.copyWith(
+        executable: r'C:\new\ChatGPT.exe',
+      );
+      backend.responses['launch'] = {
+        'launched': true,
+        'settings': saved.toJson(),
+      };
+      expect(await controller.action('repair_launch'), isTrue);
+      expect(backend.calls, ['bootstrap', 'launch', 'repair_launch', 'launch']);
+      expect(
+        backend.payloads[2]['packageFullName'],
+        'OpenAI.Codex_1.2.3.4_x64__2p2nqsd0c76g0',
+      );
+      expect(
+        (backend.payloads[3]['settings'] as Map)['zoneId'],
+        'America/New_York',
+      );
+      expect(controller.settings.executable, saved.executable);
+      expect(controller.repairPackage, isNull);
+      expect(controller.dirty, isFalse);
+    },
+  );
+
+  test('UAC cancellation retains draft and never retries launch', () async {
+    final backend = FakeBackend();
+    final controller = await prepareRepair(backend);
+    backend.responses['repair_launch'] = {'cancelled': true, 'message': '已取消'};
+    expect(await controller.action('repair_launch'), isFalse);
+    expect(backend.calls, ['bootstrap', 'launch', 'repair_launch']);
+    expect(controller.message, '已取消');
+    expect(controller.dirty, isTrue);
+    expect(controller.busy, isFalse);
+  });
+
+  test(
+    'repair failure requires a fresh check and never retries launch',
+    () async {
+      final backend = FakeBackend();
+      final controller = await prepareRepair(backend);
+      backend.failCommand = 'repair_launch';
+      expect(await controller.action('repair_launch'), isFalse);
+      expect(controller.repairPackage, isNull);
+      expect(controller.dirty, isTrue);
+      expect(await controller.action('repair_launch'), isFalse);
+      expect(backend.calls, ['bootstrap', 'launch', 'repair_launch']);
+    },
+  );
+
+  test('identity regression during retry cannot cause a repair loop', () async {
+    final backend = FakeBackend();
+    final controller = await prepareRepair(backend);
+    backend.responses['repair_launch'] = {'healthy': true};
+    expect(await controller.action('repair_launch'), isFalse);
+    expect(backend.calls, ['bootstrap', 'launch', 'repair_launch', 'launch']);
+    expect(controller.repairPackage, isNotNull);
+    expect(controller.dirty, isTrue);
+  });
+
+  test(
+    'editing the target or timezone invalidates the pending repair',
+    () async {
+      final backend = FakeBackend();
+      final controller = await prepareRepair(backend);
+      controller.update(
+        controller.settings.copyWith(executable: r'C:\other\Codex.exe'),
+      );
+      expect(controller.repairPackage, isNull);
+      expect(await controller.action('repair_launch'), isFalse);
+      expect(backend.calls, ['bootstrap', 'launch']);
+    },
+  );
+
+  test('pending repair blocks duplicate requests', () async {
+    final backend = FakeBackend();
+    final controller = await prepareRepair(backend);
+    backend.pending = Completer();
+    final repair = controller.action('repair_launch');
+    expect(await controller.action('repair_launch'), isFalse);
+    expect(await controller.action('launch'), isFalse);
+    backend.pending!.complete({'cancelled': true});
+    expect(await repair, isFalse);
+    expect(backend.calls, ['bootstrap', 'launch', 'repair_launch']);
+  });
+
+  test(
+    'closing the launcher while repairing prevents automatic launch',
+    () async {
+      final backend = FakeBackend()..responses['launch'] = needsRepair;
+      final controller = LauncherController(backend);
+      await controller.initialize();
+      await controller.action('launch');
+      backend.pending = Completer();
+      final operation = controller.action('repair_launch');
+      controller.dispose();
+      backend.pending!.complete({'healthy': true});
+      expect(await operation, isFalse);
+      expect(backend.calls, ['bootstrap', 'launch', 'repair_launch']);
+    },
+  );
   test(
     'file chooser cancellation releases busy state without modifying draft',
     () async {

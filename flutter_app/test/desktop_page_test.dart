@@ -22,6 +22,7 @@ class FakeDesktop implements DesktopServices {
 
 class Backend implements LauncherBackend {
   final List<String> calls = [];
+  bool repairRequired = false;
   @override
   Future<Map<String, dynamic>> call(
     String command, [
@@ -30,12 +31,58 @@ class Backend implements LauncherBackend {
     calls.add(command);
     if (command == 'bootstrap') return const PreviewBackend().call(command);
     if (command == 'validate') return {'path': payload['path']};
+    if (command == 'launch' && repairRequired) {
+      return {
+        'repairRequired': true,
+        'target': {
+          'executable': r'C:\WindowsApps\current\app\ChatGPT.exe',
+          'package': {
+            'fullName': 'OpenAI.Codex_26.928.2636.0_x64__2p2nqsd0c76g0',
+          },
+        },
+        'message': '检测到包身份异常。',
+      };
+    }
+    if (command == 'repair_launch') {
+      return {'cancelled': true, 'message': '已取消管理员确认'};
+    }
     return {'message': '设置已保存。'};
   }
 }
 
 void main() {
   setUpAll(timezone.initializeTimeZones);
+  for (final width in [600.0, 1280.0]) {
+    testWidgets('repair action is explicit and usable at width $width', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = Size(width, 800);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final backend = Backend()..repairRequired = true;
+      await tester.pumpWidget(
+        LauncherApplication(
+          backend: backend,
+          networkFactory: () => NetworkController(preview: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('一键修复并重试'), findsNothing);
+      await tester.tap(find.text('保存并启动'));
+      await tester.pumpAndSettle();
+      expect(backend.calls, ['bootstrap', 'launch']);
+      expect(find.text('一键修复并重试'), findsOneWidget);
+      expect(find.textContaining('需要 Windows 管理员确认'), findsOneWidget);
+      await tester.tap(find.text('一键修复并重试'));
+      await tester.pumpAndSettle();
+      expect(backend.calls, ['bootstrap', 'launch', 'repair_launch']);
+      expect(find.text('已取消管理员确认'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
   testWidgets(
     'Forui file selection, dirty state and clipboard feedback are wired',
     (tester) async {

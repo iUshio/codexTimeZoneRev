@@ -19,6 +19,7 @@ use ::windows::{
 mod launch_log;
 mod process;
 mod target;
+mod repair;
 
 struct Runtime;
 impl Runtime {
@@ -240,12 +241,13 @@ fn launch(dir: &Path, s: Settings) -> Result<Value, String> {
     }
     result.map_err(|error| format!("{error}\n启动日志：{}", log.path.display()))
 }
-fn launch_inner(dir: &Path, s: Settings, log: &mut launch_log::LaunchLog) -> Result<Value, String> {
+fn launch_inner(dir: &Path, mut s: Settings, log: &mut launch_log::LaunchLog) -> Result<Value, String> {
     let timezone = tz(&s)?;
     log.record("requested", json!({"timezone":timezone,"dreamSkinCompatible":s.dream_skin_compatible}))?;
-    let target = if s.executable.trim().is_empty() {
-        target::discover().ok_or("未找到 Codex 桌面客户端，请手动选择。")?
-    } else { target::resolve(&s.executable)? };
+    let target = target::for_launch(&s.executable)?;
+    if !s.executable.trim().is_empty() {
+        s.executable = target.executable.to_string_lossy().into_owned();
+    }
     log.record("target_resolved", json!({"target":target}))?;
     let path = &target.executable;
     if is_running(&path)? { return Err("客户端正在运行，请保存工作并完全退出 Codex 后重试。".into()); }
@@ -266,6 +268,9 @@ fn launch_inner(dir: &Path, s: Settings, log: &mut launch_log::LaunchLog) -> Res
     if let Err(error) = process::require_identity(target.package.as_ref(), &observed) {
         let cleanup = child.abort();
         let _ = log.record("identity_rejected", json!({"pid":child.id,"error":error,"cleanupError":cleanup.as_ref().err()}));
+        if cleanup.is_ok() && repair::supported(&target, &observed) {
+            return Ok(repair::required(&target, &log.path));
+        }
         return Err(match cleanup { Ok(()) => error, Err(cleanup) => format!("{error}\n{cleanup}") });
     }
     log.record("identity_checked", json!({"required":target.package.is_some(),"pid":child.id}))?;
@@ -285,7 +290,7 @@ fn launch_inner(dir: &Path, s: Settings, log: &mut launch_log::LaunchLog) -> Res
     warnings.dedup();
     let mut message = if s.dream_skin_compatible { "Codex 进程已按所选时区启动，Dream Skin 已应用；尚未确认客户端窗口就绪。" } else { "Codex 进程已按所选时区启动；尚未确认客户端窗口就绪。" }.to_string();
     if !warnings.is_empty() { message.push_str(&format!("\n进程保持运行；日志记录不完整：{}", warnings.join("；"))); }
-    Ok(json!({"launched":true,"pid":child.id,"windowReadyVerified":false,"identityVerified":target.package.is_some(),"target":target,"logPath":log.path,"warnings":warnings,"message":message}))
+    Ok(json!({"launched":true,"settings":s,"pid":child.id,"windowReadyVerified":false,"identityVerified":target.package.is_some(),"target":target,"logPath":log.path,"warnings":warnings,"message":message}))
 }
 pub fn execute(command: &str, payload: Value) -> Result<Value, String> {
     let _runtime = Runtime::new()?;
@@ -297,6 +302,15 @@ pub fn execute(command: &str, payload: Value) -> Result<Value, String> {
         "validate" => { let target = target::resolve(payload["path"].as_str().unwrap_or_default())?; Ok(json!({"path":target.executable,"target":target})) },
         "save" => { save(&dir, &settings(&payload, &dir)?)?; Ok(json!({"path":dir.join("settings.json"),"message":format!("设置已保存到 {}", dir.join("settings.json").display())})) },
         "launch" => launch(&dir, settings(&payload, &dir)?),
+        "check_launch" => {
+            let s = settings(&payload, &dir)?;
+            let target = target::for_launch(&s.executable)?;
+            repair::check(&target, &tz(&s)?, &mut launch_log::LaunchLog::new(&dir)?)
+        },
+        "repair_launch" => {
+            let s = settings(&payload, &dir)?;
+            repair::run(&dir, &s.executable, &tz(&s)?, payload["packageFullName"].as_str().ok_or("缺少待修复的版本，请先检查启动。")?)
+        },
         "reapply_dream_skin" => {
             let s = if let Some(value) = payload.get("settings").filter(|v| !v.is_null()) {
                 serde_json::from_value(value.clone()).map_err(|e| e.to_string())?
