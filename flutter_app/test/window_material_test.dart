@@ -47,7 +47,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final light = tester.element(find.text('Codex 时区启动器')).theme.colors;
+      final lightTheme = tester.element(find.text('Codex 时区启动器')).theme;
+      final light = lightTheme.colors;
       expect(
         tester
             .element(find.text('Codex 时区启动器'))
@@ -58,7 +59,11 @@ void main() {
         0,
       );
       expect(light.background.a, 1);
-      expect(light.card.a, lessThan(1));
+      expect(light.card.a, 1);
+      expect(
+        (lightTheme.cardStyle.decoration as ShapeDecoration).color!.a,
+        closeTo(0.54, 0.001),
+      );
       expect(light.foreground.a, 1);
       await tester.tap(find.text('浅色').first);
       await tester.pumpAndSettle();
@@ -67,6 +72,12 @@ void main() {
       final effect = calls.lastWhere((call) => call.method == 'SetEffect');
       expect(effect.arguments['dark'], true);
       expect(effect.arguments['effect'], 4);
+      final darkTheme = tester.element(find.text('Codex 时区启动器')).theme;
+      expect(darkTheme.colors.card.a, 1);
+      expect(
+        (darkTheme.cardStyle.decoration as ShapeDecoration).color!.a,
+        closeTo(0.48, 0.001),
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
