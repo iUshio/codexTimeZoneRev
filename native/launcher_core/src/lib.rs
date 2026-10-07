@@ -38,7 +38,7 @@ fn dispatch(request: &str) -> Result<Value, String> {
             .map(|proxy| json!({"proxy": proxy}));
     }
     // Reject unknown commands before initializing OS services or touching files.
-    if !["bootstrap", "discover", "validate", "save", "launch", "create_shortcut", "launch_dream_skin", "reapply_dream_skin"].contains(&request.command.as_str()) {
+    if !["bootstrap", "discover", "validate", "save", "launch", "check_launch", "repair_launch", "create_shortcut", "launch_dream_skin", "reapply_dream_skin"].contains(&request.command.as_str()) {
         return Err(format!("未知命令：{}", request.command));
     }
     let _guard = REQUEST_LOCK.lock().map_err(|_| "系统功能锁不可用，请重启启动器。".to_string())?;

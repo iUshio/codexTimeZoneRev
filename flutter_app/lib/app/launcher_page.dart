@@ -247,11 +247,35 @@ class LauncherPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
+            if (launcher.repairPackage != null) ...[
+              Text(
+                '待修复版本：${launcher.repairPackage}\n仅修复当前版本的启动权限，保留原权限备份；完成后自动重试启动。需要 Windows 管理员确认。',
+                style: context.theme.typography.body.sm,
+              ),
+              if (launcher.repairLogPath != null)
+                Text(
+                  '启动日志：${launcher.repairLogPath}',
+                  style: context.theme.typography.body.sm,
+                ),
+              const SizedBox(height: 12),
+            ],
             Wrap(
               spacing: 10,
               runSpacing: 10,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
+                if (launcher.repairPackage != null)
+                  FButton(
+                    mainAxisSize: MainAxisSize.min,
+                    onPress: launcher.canSave
+                        ? () => launcher.action('repair_launch')
+                        : null,
+                    child: Text(
+                      launcher.busyCommand == 'repair_launch'
+                          ? '正在修复…'
+                          : '一键修复并重试',
+                    ),
+                  ),
                 FButton(
                   mainAxisSize: MainAxisSize.min,
                   onPress: launcher.canLaunch

@@ -16,6 +16,18 @@
 
 在 [GitHub Releases](https://github.com/iUshio/codexTimeZoneRev/releases) 下载对应平台的 ZIP。Windows 解压后运行 `codex_timezone.exe`，并保留同目录的 DLL 和 `data` 资源。macOS 解压后运行应用；当前 macOS 包仅使用临时签名，尚未完成 Developer ID 签名与公证，系统可能要求用户手动确认打开。
 
+### Windows 启动排错
+
+对于 Microsoft Store / MSIX 安装的客户端，每次启动都会重新识别当前注册版本；设置中保存的旧 Store 版本路径会跟随更新。普通手动安装路径保持原选择。新进程在执行前核对程序包与应用身份。
+
+若检测到受支持的 `15700 / 15703` 身份缺失，点击“一键修复并重试”，再确认 Windows 管理员提示。启动器先备份权限，仅将当前 Codex 包的一条已知异常普通用户规则从读取和执行缩小为读取，保留包身份条件执行权限、所有者及其他规则。完成后重新检查身份，并按原时区和皮肤设置重试一次。取消授权、权限不符合条件、版本变化或复检失败都会停止；不会关闭现有客户端。正常启动不会请求管理员权限。
+
+权限备份、修复结果和日志保存在 `data/repairs/repair-*/`。需要回退时，核对该次 `plan.json` 后在管理员 Windows PowerShell 中运行同目录的 `repair_package_acl.ps1 -Mode Rollback -PlanPath <plan.json绝对路径>`；脚本仅接受原版本和符合备份的权限状态。回退可能恢复原启动故障。请勿重置整个 WindowsApps 的权限。
+
+此流程用于在更新后再次出现已知权限问题时恢复启动，不保证未来客户端版本或未知权限变化均可自动修复。修复脚本内置在 DLL 中，完整发布包不依赖本机 diagnostics 文件夹。
+
+启动阶段、目标版本、所选时区和原生错误会写入启动器旁的 `data/launch.log`，不记录完整环境变量。普通启动提示仅确认进程已启动；客户端窗口就绪及最终显示的时区仍需实际确认。
+
 ## 从源码构建
 
 需要 Flutter 3.47.5（Dart 3.13.4）、Rust stable。Windows 还需要 Visual Studio C++ 桌面工具链；macOS 需要完整 Xcode。将 Flutter 的 `bin` 与 Cargo 加入 `PATH`，或在 Windows 传入 `-FlutterSdk`。
@@ -24,6 +36,10 @@
 # Windows：在仓库根目录运行
 .\scripts\flutter-windows.ps1 -Action test
 .\scripts\test-native-windows.ps1
+.\scripts\test-package-acl-repair.ps1
+.\scripts\test-repair-entry.ps1
+# 可选：以安装 Codex 的用户验证当前包身份、旧路径跟随更新和过期修复拒绝；不执行客户端代码。
+.\scripts\test-native-windows.ps1 -InstalledPreflight
 .\scripts\flutter-windows.ps1 -Action build
 ```
 
