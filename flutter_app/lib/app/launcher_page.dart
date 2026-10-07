@@ -77,7 +77,7 @@ class LauncherPage extends StatelessWidget {
       if (settings.mode == 'zone')
         FSelect<String>.search(
           label: const Text('地区时区'),
-          description: const Text('自动遵循地区夏令时规则。'),
+          description: const Text('覆盖美国、亚洲、欧洲等常用地区，可搜索城市或时区名称；自动遵循地区夏令时规则。'),
           items: {
             for (final zone in launcher.zones)
               '${zone.label} · ${zone.id}': zone.id,

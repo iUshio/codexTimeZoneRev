@@ -1,7 +1,7 @@
 name: codex_timezone
 description: Codex 时区启动器，Flutter + Forui 桌面版。
 publish_to: none
-version: 0.2.0+1
+version: 0.2.1+2
 environment:
   sdk: '>=3.13.0 <4.0.0'
   flutter: '>=3.47.0'

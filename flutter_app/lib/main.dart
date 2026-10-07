@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:timezone/data/latest.dart' as timezone;
+import 'package:timezone/data/latest_all.dart' as timezone;
 
 import 'app/application.dart';
 import 'services/window_material.dart';
