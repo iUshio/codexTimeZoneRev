@@ -135,6 +135,7 @@ void main() {
           await tester.pumpAndSettle();
           expect(service.calls, 0);
           expect(find.text('点击按钮后查询，不会自动获取或刷新。'), findsOneWidget);
+          expect(find.text('本地时间 · 系统时区'), findsOneWidget);
           final card = find.byKey(const ValueKey('account-usage-card'));
           expect(
             tester.getTopLeft(card).dy,
@@ -212,20 +213,25 @@ void main() {
           );
           expect(
             find.text(
-              usageResetTime(const LauncherSettings(), reset, local: false),
+              usageResetTime(const LauncherSettings(), reset, local: true),
             ),
             findsOneWidget,
           );
           await tester.ensureVisible(
             find.byKey(const ValueKey('usage-time-basis')),
           );
-          await tester.tap(find.text('节点时间').first);
+          await tester.tap(
+            find.descendant(
+              of: find.byKey(const ValueKey('usage-time-basis')),
+              matching: find.text('本地时间'),
+            ),
+          );
           await tester.pumpAndSettle();
-          await tester.tap(find.text('本地时间').last);
+          await tester.tap(find.text('节点时间').last);
           await tester.pumpAndSettle();
           expect(
             find.text(
-              usageResetTime(const LauncherSettings(), reset, local: true),
+              usageResetTime(const LauncherSettings(), reset, local: false),
             ),
             findsOneWidget,
           );

@@ -8,7 +8,7 @@ class AccountUsageController extends ChangeNotifier {
   AccountUsage? data;
   String? error;
   bool busy = false;
-  bool useLocalTime = false;
+  bool useLocalTime = true;
   bool _disposed = false;
 
   void setLocalTime(bool value) {
