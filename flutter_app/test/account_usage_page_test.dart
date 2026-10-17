@@ -185,7 +185,15 @@ void main() {
           expect(find.text('已用 5%'), findsOneWidget);
           expect(find.text('1,234,567'), findsOneWidget);
           expect(find.text('12,345'), findsOneWidget);
-          expect(find.textContaining('年 10 月 14 日'), findsWidgets);
+          // This page uses live clocks. A fixed calendar date makes the release
+          // suite fail the day after it was authored; clock values have their
+          // own deterministic tests in clocks_test.dart.
+          expect(
+            find.textContaining(
+              RegExp(r'^\d{4} 年 \d{1,2} 月 \d{1,2} 日 · 星期[一二三四五六日]$'),
+            ),
+            findsNWidgets(2),
+          );
           expect(find.byType(FDeterminateProgress), findsNWidgets(3));
           if (width >= 820) {
             expect(

@@ -13,8 +13,16 @@ pub(super) struct LaunchLog {
 }
 impl LaunchLog {
     pub fn new(directory: &Path) -> Result<Self, String> {
+        Self::named(directory, "launch.log")
+    }
+
+    pub fn preflight(directory: &Path) -> Result<Self, String> {
+        Self::named(directory, "preflight.log")
+    }
+
+    fn named(directory: &Path, name: &str) -> Result<Self, String> {
         fs::create_dir_all(directory).map_err(|e| format!("无法创建启动日志目录：{e}"))?;
-        let path = directory.join("launch.log");
+        let path = directory.join(name);
         let file = File::create(&path).map_err(|e| format!("无法创建启动日志：{e}"))?;
         Ok(Self { path, file })
     }

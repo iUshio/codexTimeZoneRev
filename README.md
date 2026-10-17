@@ -19,6 +19,12 @@
 
 ### Windows 启动排错
 
+Windows 版 0.2.3 内置 MSIX 包身份兼容引导，直接双击 `codex_timezone.exe` 即可，无需额外 CMD/PS1。启动器在普通桌面环境启动后重新发现当前注册的 Codex 包，通过 Windows 自带 PowerShell 的 `Invoke-CommandInDesktopPackage` 进入正确包身份，再显示原界面。不会请求管理员权限、改写包权限或关闭正在运行的 Codex。内部交接验证包版本和应用身份，失败或超时会停止重试并记录原因。
+
+该兼容路径针对 Windows 更新后直接创建 Store 客户端进程返回“拒绝访问（错误 5）”的情况。这个错误本身不证明权限损坏，请勿因此重复修改 ACL。微软将上述命令定义为调试接口，其上下文不与正式应用激活完全等同；未来系统或客户端更新后仍应复检。
+
+可运行 `codex_timezone.exe --verify-launch` 做无界面检查：只创建、校验并清理挂起的客户端，不执行客户端代码。结果在 `data/context-check.json`，退出码 0 表示通过；引导日志在 `data/context.log` 和 `data/context-bootstrap/`，原生检查日志在 `data/preflight.log`。这些检查不会覆盖 `data/launch.log`。新客户端实际显示时区须在用户自然关闭旧客户端后验证。
+
 对于 Microsoft Store / MSIX 安装的客户端，每次启动都会重新识别当前注册版本；设置中保存的旧 Store 版本路径会跟随更新。普通手动安装路径保持原选择。新进程在执行前核对程序包与应用身份。
 
 若检测到受支持的 `15700 / 15703` 身份缺失，点击“一键修复并重试”，再确认 Windows 管理员提示。启动器先备份权限，仅将当前 Codex 包的一条已知异常普通用户规则从读取和执行缩小为读取，保留包身份条件执行权限、所有者及其他规则。完成后重新检查身份，并按原时区和皮肤设置重试一次。取消授权、权限不符合条件、版本变化或复检失败都会停止；不会关闭现有客户端。正常启动不会请求管理员权限。
@@ -39,6 +45,7 @@
 .\scripts\test-native-windows.ps1
 .\scripts\test-package-acl-repair.ps1
 .\scripts\test-repair-entry.ps1
+.\scripts\test-bootstrap-windows.ps1
 # 可选：以安装 Codex 的用户验证当前包身份、旧路径跟随更新和过期修复拒绝；不执行客户端代码。
 .\scripts\test-native-windows.ps1 -InstalledPreflight
 .\scripts\flutter-windows.ps1 -Action build

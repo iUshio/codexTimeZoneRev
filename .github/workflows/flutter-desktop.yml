@@ -28,6 +28,7 @@ jobs:
         run: |
           ./scripts/flutter-windows.ps1 -Action test -FlutterSdk $env:FLUTTER_ROOT
           ./scripts/test-native-windows.ps1 -FlutterSdk $env:FLUTTER_ROOT
+          ./scripts/test-bootstrap-windows.ps1
           ./scripts/flutter-windows.ps1 -Action build -FlutterSdk $env:FLUTTER_ROOT
       - name: macOS checks and local signed build
         if: runner.os == 'macOS'

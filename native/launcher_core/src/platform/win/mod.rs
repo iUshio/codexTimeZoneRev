@@ -17,6 +17,8 @@ use ::windows::{
 };
 
 mod launch_log;
+#[cfg(test)]
+mod log_tests;
 mod process;
 mod target;
 mod repair;
@@ -314,9 +316,12 @@ pub fn execute(command: &str, payload: Value) -> Result<Value, String> {
         "save" => { save(&dir, &settings(&payload, &dir)?)?; Ok(json!({"path":dir.join("settings.json"),"message":format!("设置已保存到 {}", dir.join("settings.json").display())})) },
         "launch" => launch(&dir, settings(&payload, &dir)?),
         "check_launch" => {
+            let mut log = launch_log::LaunchLog::preflight(&dir)?;
             let s = settings(&payload, &dir)?;
             let target = target::for_launch(&s.executable)?;
-            repair::check(&target, &tz(&s)?, &mut launch_log::LaunchLog::new(&dir)?)
+            let result = repair::check(&target, &tz(&s)?, &mut log);
+            if let Err(error) = &result { let _ = log.record("failed", json!({"error":error})); }
+            result
         },
         "repair_launch" => {
             let s = settings(&payload, &dir)?;
