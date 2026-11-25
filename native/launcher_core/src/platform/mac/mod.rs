@@ -3,9 +3,10 @@ use serde_json::{json, Value};
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::{
     fs,
+    io::Write,
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    time::Duration,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 fn home() -> Result<PathBuf, String> {
@@ -124,6 +125,26 @@ fn launch_skin_app() -> Result<Value, String> {
     Command::new("/usr/bin/open").arg(&app).spawn().map_err(|e| format!("无法启动 Dream Skin：{e}"))?;
     Ok(json!({"launched":true,"message":"Dream Skin（macOS）已启动。"}))
 }
+fn installed_skin_script(user_home: &Path) -> Result<PathBuf, String> {
+    let root = user_home.join(".codex/codex-dream-skin-studio");
+    let entry = "scripts/start-dream-skin-macos.sh";
+    // DreamSkin resolves assets relative to the script. Its bundled and
+    // installed engines can have the same version but different selectors.
+    for file in [
+        entry,
+        "scripts/common-macos.sh",
+        "scripts/injector.mjs",
+        "assets/renderer-inject.js",
+        "assets/selectors.json",
+        "assets/dream-skin.css",
+    ] {
+        let path = root.join(file);
+        if !fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
+            return Err(format!("DreamSkin 用户引擎文件缺失或无效：{}。请打开 DreamSkin 管理器完成安装或修复，再重新应用皮肤。", path.display()));
+        }
+    }
+    Ok(root.join(entry))
+}
 fn skin_port() -> Result<u16, String> {
     let state = home()?.join("Library/Application Support/CodexDreamSkinStudio/state.json");
     if !state.exists() { return Ok(9341); }
@@ -132,30 +153,55 @@ fn skin_port() -> Result<u16, String> {
     if !(1024..=65535).contains(&port) { return Err("Dream Skin 端口无效。".into()); }
     Ok(port as u16)
 }
-fn apply_skin(dir: &Path, bundle: &Path, port: u16) -> Result<Value, String> {
-    if !endpoint_ready(port) {
-        return Err("当前客户端没有可用的皮肤调试接口。请保存工作并完全退出 Codex / ChatGPT，勾选 Dream Skin 兼容启动后点击“保存并启动”。只打开 Dream Skin 管理器不会给已运行的客户端增加调试接口。".into());
-    }
-    let app = skin_bundle()?;
+fn apply_skin(
+    dir: &Path, bundle: &Path, script: &Path, port: u16, launched_at: Option<Instant>,
+) -> Result<Value, String> {
+    let started = launched_at.unwrap_or_else(Instant::now);
+    let ready = match launched_at {
+        Some(_) => wait_endpoint(port, Duration::from_secs(45)),
+        None if endpoint_ready(port) => Ok(()),
+        None => Err("当前客户端没有可用的皮肤调试接口。请保存工作并完全退出 Codex / ChatGPT，勾选 Dream Skin 兼容启动后点击“保存并启动”。只打开 Dream Skin 管理器不会给已运行的客户端增加调试接口。".into()),
+    };
+    let endpoint_elapsed = started.elapsed();
+    let endpoint_ready = ready.is_ok();
     let mut cmd = Command::new("/bin/bash");
-    cmd.arg(app.join("Contents/Resources/engine/scripts/start-dream-skin-macos.sh"))
+    cmd.arg(script)
         .args(["--port", &port.to_string()])
         .env("CODEX_APP_BUNDLE", bundle)
         // The script compares ps start-time strings with persisted injector
         // identity. A per-client TZ must not change those comparisons.
         .env_remove("TZ")
         .env_remove("ELECTRON_RUN_AS_NODE");
-    run_logged(cmd, &dir.join("dream-skin.log"), Duration::from_secs(150))?;
+    let result = ready.and_then(|()| run_logged(cmd, &dir.join("dream-skin.log"), Duration::from_secs(150)));
+    let total = started.elapsed();
+    let outcome = match (endpoint_ready, result.is_ok()) {
+        (false, _) => "endpoint_unavailable",
+        (true, false) => "unconfirmed",
+        (true, true) => "verified",
+    };
+    let mode = if launched_at.is_some() { "launch" } else { "reapply" };
+    let finished = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let script_ms = if endpoint_ready { (total - endpoint_elapsed).as_millis() } else { 0 };
+    let record = format!(
+        "unix_s={finished} mode={mode} status={outcome} endpoint_ms={} script_ms={script_ms} total_ms={} script={script:?}\n",
+        endpoint_elapsed.as_millis(), total.as_millis(),
+    );
+    // Diagnostics must not replace script stderr or change its success status.
+    let _ = fs::create_dir_all(dir).and_then(|()| {
+        fs::OpenOptions::new().create(true).append(true)
+            .open(dir.join("dream-skin-timing.log"))?.write_all(record.as_bytes())
+    });
+    result?;
     Ok(json!({"launched":true,"message":"Dream Skin 已完成皮肤应用和验证。当前客户端的时区保持不变。"}))
 }
 fn reapply_skin(dir: &Path, s: Settings) -> Result<Value, String> {
     let selected = if s.executable.trim().is_empty() { discover() } else { s.executable };
     let (bundle, executable) = validate(&selected)?;
-    skin_bundle()?;
     if !is_running(&executable)? {
         return Err("客户端尚未运行。请勾选 Dream Skin 兼容启动，再点击“保存并启动”。".into());
     }
-    apply_skin(dir, &bundle, skin_port()?)
+    let script = installed_skin_script(&home()?)?;
+    apply_skin(dir, &bundle, &script, skin_port()?, None)
 }
 fn launch(dir: &Path, s: Settings) -> Result<Value, String> {
     tz(&s)?;
@@ -165,35 +211,26 @@ fn launch(dir: &Path, s: Settings) -> Result<Value, String> {
         return Err("客户端正在运行，请保存工作并完全退出 Codex / ChatGPT 后重试。".into());
     }
     let mut cmd = launch_command(&executable, &s)?;
-    let port = if s.dream_skin_compatible {
-        skin_bundle()?;
+    let skin = if s.dream_skin_compatible {
+        let script = installed_skin_script(&home()?)?;
         let port = skin_port()?;
         let listener = std::net::TcpListener::bind(("127.0.0.1", port)).map_err(|_| "Dream Skin 调试端口已占用，请先退出相关客户端。")?;
         drop(listener);
         cmd.arg("--remote-debugging-address=127.0.0.1").arg(format!("--remote-debugging-port={port}"));
-        Some(port)
+        Some((script, port))
     } else { None };
     save(dir, &s)?;
+    let started = Instant::now();
     let mut child = cmd.spawn().map_err(|e| format!("无法启动客户端：{e}"))?;
     std::thread::sleep(Duration::from_millis(800));
     if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
         return Err(format!("客户端启动后提前退出：{status}。请检查是否已有实例运行。"));
     }
     std::thread::spawn(move || { let _ = child.wait(); });
-    if let Some(port) = port {
-        wait_endpoint(port, Duration::from_secs(45))?;
-        apply_skin(dir, &bundle, port)?;
+    if let Some((script, port)) = skin {
+        apply_skin(dir, &bundle, &script, port, Some(started))?;
     }
     Ok(json!({"launched":true,"message":if s.dream_skin_compatible { "Codex 已按所选时区启动，Dream Skin 已验证应用。" } else { "Codex 已按所选时区启动（Dream Skin 兼容启动未开启）。" }}))
-}
-fn enable_skin(dir: &Path, mut s: Settings) -> Result<Value, String> {
-    skin_bundle()?;
-    s.dream_skin_compatible = true;
-    save(dir, &s)?;
-    let selected = if s.executable.trim().is_empty() { discover() } else { s.executable.clone() };
-    let (bundle, executable) = validate(&selected)?;
-    if is_running(&executable)? { apply_skin(dir, &bundle, skin_port()?) }
-    else { launch(dir, s) }
 }
 fn create_shortcut(executable: &Path, desktop: &Path) -> Result<PathBuf, String> {
     let bundle = executable
@@ -248,6 +285,26 @@ mod tests {
         let p = std::env::temp_dir().join(format!("codex-tz-{}-{name}", std::process::id()));
         fs::create_dir_all(&p).unwrap();
         p
+    }
+    #[test]
+    fn resolves_only_the_installed_dreamskin_engine() {
+        let home = tempfile::tempdir().unwrap();
+        let entry = "scripts/start-dream-skin-macos.sh";
+        let bundled = home.path().join("Applications/Codex Dream Skin.app/Contents/Resources/engine");
+        fs::create_dir_all(bundled.join("scripts")).unwrap();
+        fs::write(bundled.join(entry), "").unwrap();
+        assert!(installed_skin_script(home.path()).unwrap_err().contains("管理器"));
+
+        let installed = home.path().join(".codex/codex-dream-skin-studio");
+        for file in [entry, "scripts/common-macos.sh", "scripts/injector.mjs",
+                     "assets/renderer-inject.js", "assets/selectors.json", "assets/dream-skin.css"] {
+            let path = installed.join(file);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, "").unwrap();
+        }
+        assert_eq!(installed_skin_script(home.path()).unwrap(), installed.join(entry));
+        fs::remove_file(installed.join("assets/selectors.json")).unwrap();
+        assert!(installed_skin_script(home.path()).unwrap_err().contains("selectors.json"));
     }
     #[test]
     fn timezone_rules() {
